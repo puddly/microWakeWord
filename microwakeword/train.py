@@ -108,14 +108,19 @@ def validate_nonstreaming(config, data_processor, model, test_set):
         metrics["auc"] = ambient_predictions["auc"]
         metrics["loss"] = ambient_predictions["loss"]
 
-        recall_at_cutoffs = (
-            all_true_positives / (all_true_positives + all_false_negatives)
+        recall_at_cutoffs = all_true_positives / (
+            all_true_positives + all_false_negatives
+        )
+        fnr_at_cutoffs = all_false_negatives / (
+            all_true_positives + all_false_negatives
         )
         faph_at_cutoffs = ambient_false_positives / duration_of_ambient_set
 
         target_faph_cutoff_probability = 1.0
+        target_faph_cutoff_probability_index = 0
         for index, cutoff in enumerate(np.linspace(0.0, 1.0, 101)):
             if faph_at_cutoffs[index] == 0:
+                target_faph_cutoff_probability_index = index
                 target_faph_cutoff_probability = cutoff
                 recall_at_no_faph = recall_at_cutoffs[index]
                 break
@@ -156,6 +161,7 @@ def validate_nonstreaming(config, data_processor, model, test_set):
 
         metrics["recall_at_no_faph"] = recall_at_no_faph
         metrics["cutoff_for_no_faph"] = target_faph_cutoff_probability
+        metrics["fnr_at_no_faph"] = fnr_at_cutoffs[target_faph_cutoff_probability_index]
         metrics["ambient_false_positives"] = ambient_false_positives[50]
         metrics["ambient_false_positives_per_hour"] = faph_at_cutoffs[50]
         metrics["average_viable_recall"] = average_viable_recall
@@ -342,10 +348,11 @@ def train(model, config, data_processor):
             )
             model.reset_metrics()  # reset metrics for next validation epoch of training
             logging.info(
-                "Step %d (nonstreaming): Validation: recall at no faph = %.3f with cutoff %.2f, accuracy = %.2f%%, recall = %.2f%%, precision = %.2f%%, ambient false positives = %d, estimated false positives per hour = %.5f, loss = %.5f, auc = %.5f, average viable recall = %.9f",
+                "Step %d (nonstreaming): Validation: recall at no faph = %.3f and false negative rate = %0.3f with cutoff %.2f, accuracy = %.2f%%, recall = %.2f%%, precision = %.2f%%, ambient false positives = %d, estimated false positives per hour = %.5f, loss = %.5f, auc = %.5f, average viable recall = %.9f",
                 *(
                     training_step,
                     nonstreaming_metrics["recall_at_no_faph"] * 100,
+                    nonstreaming_metrics["fnr_at_no_faph"] * 100,
                     nonstreaming_metrics["cutoff_for_no_faph"],
                     nonstreaming_metrics["accuracy"] * 100,
                     nonstreaming_metrics["recall"] * 100,
@@ -374,6 +381,11 @@ def train(model, config, data_processor):
                 tf.summary.scalar(
                     "recall_at_no_faph",
                     nonstreaming_metrics["recall_at_no_faph"],
+                    step=training_step,
+                )
+                tf.summary.scalar(
+                    "fnr_at_no_faph",
+                    nonstreaming_metrics["fnr_at_no_faph"],
                     step=training_step,
                 )
                 tf.summary.scalar(
