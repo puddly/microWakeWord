@@ -203,7 +203,7 @@ def train(model, config, data_processor):
     pad_list_with_last_entry(positive_class_weight_list, training_step_iterations)
     pad_list_with_last_entry(negative_class_weight_list, training_step_iterations)
 
-    loss = tf.keras.losses.BinaryCrossentropy(from_logits=False)
+    loss = tf.keras.losses.BinaryFocalCrossentropy(from_logits=False)
     optimizer = tf.keras.optimizers.Adam()
 
     cutoffs = np.linspace(0.0, 1.0, 101).tolist()
