@@ -302,16 +302,17 @@ def train(model, config, data_processor):
             train_fingerprints,
             train_ground_truth,
             sample_weight=combined_weights,
+            return_dict=True,
         )
 
         # Print the running statistics in the current validation epoch
         print(
             "Validation Batch #{:d}: Accuracy = {:.3f}; Recall = {:.3f}; Precision = {:.3f}; Loss = {:.4f}; Mini-Batch #{:d}".format(
                 (training_step // config["eval_step_interval"] + 1),
-                result[1],
-                result[2],
-                result[3],
-                result[9],
+                result["accuracy"],
+                result["recall"],
+                result["precision"],
+                result["loss"],
                 (training_step % config["eval_step_interval"]),
             ),
             end="\r",
@@ -324,19 +325,19 @@ def train(model, config, data_processor):
                 *(
                     training_step,
                     learning_rate,
-                    result[1] * 100,
-                    result[2] * 100,
-                    result[3] * 100,
-                    result[9],
+                    result["accuracy"] * 100,
+                    result["recall"] * 100,
+                    result["precision"] * 100,
+                    result["loss"],
                 ),
             )
 
             with train_writer.as_default():
-                tf.summary.scalar("loss", result[9], step=training_step)
-                tf.summary.scalar("accuracy", result[1], step=training_step)
-                tf.summary.scalar("recall", result[2], step=training_step)
-                tf.summary.scalar("precision", result[3], step=training_step)
-                tf.summary.scalar("auc", result[8], step=training_step)
+                tf.summary.scalar("loss", result["loss"], step=training_step)
+                tf.summary.scalar("accuracy", result["accuracy"], step=training_step)
+                tf.summary.scalar("recall", result["recall"], step=training_step)
+                tf.summary.scalar("precision", result["precision"], step=training_step)
+                tf.summary.scalar("auc", result["auc"], step=training_step)
                 train_writer.flush()
 
             model.save_weights(
