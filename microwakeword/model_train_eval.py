@@ -273,6 +273,14 @@ def evaluate_model(
             accuracy_name="tflite_streaming_roc.txt",
         )
 
+        test.tflite_streaming_model_outliers(
+            config,
+            tflite_config["output_folder"],
+            data_processor,
+            data_set=tflite_config["testing_dataset"],
+            tflite_model_name=tflite_config["filename"],
+        )
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

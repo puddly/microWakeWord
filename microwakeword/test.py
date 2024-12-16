@@ -358,7 +358,7 @@ def tflite_streaming_model_roc(
         truncation_strategy="none",
     )
 
-    logging.info("Testing the " + data_set + " set.")
+    logging.info("Testing the %s set.", data_set)
 
     positive_sample_streaming_probabilities = []
     for i in range(len(test_fingerprints)):
@@ -515,3 +515,43 @@ def tflite_model_accuracy(
     with open(os.path.join(path, accuracy_name), "wt") as fd:
         fd.write(metrics_string)
     return metrics
+
+
+def tflite_streaming_model_outliers(
+    config,
+    folder,
+    audio_processor,
+    data_set="testing",
+    tflite_model_name="stream_state_internal.tflite",
+    sliding_window_length=5,
+    ignore_slices_after_accept = 25,
+):
+    stride = config["stride"]
+    model = Model(
+        os.path.join(config["train_dir"], folder, tflite_model_name), stride=stride
+    )
+
+    test_fingerprints, test_ground_truth, _, test_clips = audio_processor.get_data(
+        data_set,
+        batch_size=config["batch_size"],
+        features_length=config["spectrogram_length"],
+        truncation_strategy="none",
+    )
+
+    logging.info("Testing the %s set.", data_set)
+
+    sample_streaming_probabilities = []
+    for i in range(len(test_fingerprints)):
+        streaming_probabilities = model.predict_spectrogram(test_fingerprints[i])
+        sliding_window_probabilities = sliding_window_view(
+            streaming_probabilities[ignore_slices_after_accept:],
+            sliding_window_length,
+        )
+        moving_average = sliding_window_probabilities.mean(axis=-1)
+        sample_streaming_probabilities.append(np.max(moving_average))
+
+    test_errors = [(abs(prob - clip["label"]), prob, clip) for prob, clip in zip(sample_streaming_probabilities, test_clips)]
+    test_errors.sort(reverse=True, key=lambda t: t[0])
+
+    for error, prob, clip in test_errors[:50]:
+        print(f"Clip {clip['audio']['path']} with label {clip['label']} had streaming probability {prob:0.3f}, error {error:0.3f}")
