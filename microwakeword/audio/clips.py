@@ -149,12 +149,16 @@ class Clips:
             test_valid = train_testvalid["test"].train_test_split(test_size=0.5)
             split_dataset = datasets.DatasetDict(
                 {
-                    "train": train_testvalid["train"],
-                    "test": test_valid["test"],
+                    "training": train_testvalid["train"],
+                    "testing": test_valid["test"],
                     "validation": test_valid["train"],
+                    "testing_ambient": [],
+                    "validation_ambient": [],
                 }
             )
             self.split_clips = split_dataset
+        else:
+            self.split_clips = None
 
         self.clips = audio_dataset
 
@@ -206,7 +210,7 @@ class Clips:
 
         return self._process_clip(random.choice(clip_list))
 
-    def random_audio_generator(self, max_clips: int = math.inf):
+    def random_audio_generator(self, split: str | None = None, max_clips: int = math.inf):
         """A Python generator that retrieves random audio clips.
 
         Args:
@@ -218,7 +222,7 @@ class Clips:
         while max_clips > 0:
             max_clips -= 1
 
-            yield self.get_random_clip()
+            yield self.get_random_clip(split=split)
 
     def repeat_clip(self, audio_samples: np.array):
         """Repeats the audio clip until its duration exceeds the minimum specified in the class.

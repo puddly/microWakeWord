@@ -346,9 +346,7 @@ class ClipsHandlerWrapperGenerator(object):
         self.penalty_weight = penalty_weight
         self.truncation_strategy = truncation_strategy
 
-        self.augmented_generator = self.spectrogram_generation.spectrogram_generator(
-            random=True
-        )
+        self.augmented_generators = {}
 
     def get_mode_duration(self, mode):
         """Function to maintain compatability with the MmapFeatureGenerator class."""
@@ -356,27 +354,12 @@ class ClipsHandlerWrapperGenerator(object):
 
     def get_mode_size(self, mode):
         """Function to maintain compatability with the MmapFeatureGenerator class. This class is intended only for retrieving spectrograms for training."""
-        if mode == "training":
-            return len(self.spectrogram_generation.clips.clips)
-        else:
-            return 0
+        assert self.spectrogram_generation.clips.split_clips is not None
+        return len(self.spectrogram_generation.clips.split_clips[mode])
 
-    def get_random_spectrogram(self, mode, features_length, truncation_strategy):
-        """Retrieves a random spectrogram from the specified mode with specified length after truncation.
-
-        Args:
-            mode (str): Specifies the set, but is ignored for this class. It is assumed the spectrograms will be for training.
-            features_length (int): The length of the spectrogram in feature windows.
-            truncation_strategy (str): How to truncate if ``spectrogram`` is too long.
-
-        Returns:
-            numpy.ndarray: A random spectrogram of specified length after truncation.
-        """
-
+    def _add_spectrogram_to_clip(self, clip, features_length, truncation_strategy):
         if truncation_strategy == "default":
             truncation_strategy = self.truncation_strategy
-
-        clip = next(self.augmented_generator)
 
         spectrogram = fixed_length_spectrogram(
             clip["spectrogram"],
@@ -392,7 +375,27 @@ class ClipsHandlerWrapperGenerator(object):
         clip["spectrogram"] = spectrogram
         clip["label"] = float(self.label)
 
-        return clip
+        return clip        
+
+
+    def get_random_spectrogram(self, mode, features_length, truncation_strategy):
+        """Retrieves a random spectrogram from the specified mode with specified length after truncation.
+
+        Args:
+            mode (str): Specifies the set, but is ignored for this class. It is assumed the spectrograms will be for training.
+            features_length (int): The length of the spectrogram in feature windows.
+            truncation_strategy (str): How to truncate if ``spectrogram`` is too long.
+
+        Returns:
+            numpy.ndarray: A random spectrogram of specified length after truncation.
+        """
+
+        # Maintain a separate generator for every mode
+        if mode not in self.augmented_generators:
+            self.augmented_generators[mode] = self.spectrogram_generation.spectrogram_generator(mode=mode, random=True)
+
+        clip = next(self.augmented_generators[mode])
+        return self._add_spectrogram_to_clip(clip, features_length, truncation_strategy)
 
     def get_feature_generator(
         self,
@@ -401,8 +404,8 @@ class ClipsHandlerWrapperGenerator(object):
         truncation_strategy="default",
     ):
         """Function to maintain compatability with the MmapFeatureGenerator class."""
-        for x in []:
-            yield x
+        for clip in self.spectrogram_generation.spectrogram_generator(mode=mode):
+            yield self._add_spectrogram_to_clip(clip, features_length, truncation_strategy)
 
 
 class FeatureHandler(object):
