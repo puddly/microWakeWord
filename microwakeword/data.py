@@ -595,7 +595,7 @@ class FeatureHandler(object):
 
         if truncation_strategy == "none":
             # Spectrograms may be of different length
-            return data, np.array(labels), np.array(weights)
+            return data, np.array(labels), np.array(weights), clips
 
         indices = np.arange(labels.shape[0])
 
@@ -603,4 +603,4 @@ class FeatureHandler(object):
             # Randomize the order of the data, weights, and labels
             np.random.shuffle(indices)
 
-        return data[indices], labels[indices], weights[indices]
+        return data[indices], labels[indices], weights[indices], np.array(clips)[indices]

@@ -39,7 +39,7 @@ def swap_attribute(obj, attr, temp_value):
 
 
 def validate_nonstreaming(config, data_processor, model, test_set):
-    testing_fingerprints, testing_ground_truth, _ = data_processor.get_data(
+    testing_fingerprints, testing_ground_truth, _, _ = data_processor.get_data(
         test_set,
         batch_size=config["batch_size"],
         features_length=config["spectrogram_length"],
@@ -76,6 +76,7 @@ def validate_nonstreaming(config, data_processor, model, test_set):
         (
             ambient_testing_fingerprints,
             ambient_testing_ground_truth,
+            _,
             _,
         ) = data_processor.get_data(
             test_set + "_ambient",
@@ -283,6 +284,7 @@ def train(model, config, data_processor):
             train_fingerprints,
             train_ground_truth,
             train_sample_weights,
+            _,
         ) = data_processor.get_data(
             "training",
             batch_size=config["batch_size"],
