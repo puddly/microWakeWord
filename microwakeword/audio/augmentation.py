@@ -240,5 +240,12 @@ class Augmentation:
         Yields:
             numpy.ndarray: The augmented audio clip's samples.
         """
-        for audio in audio_generator:
-            yield self.augment_clip(audio)
+        for clip in audio_generator:
+            output_audio = self.augment_clip(clip["audio"]["array"])
+            yield {
+                **clip,
+                "audio": {
+                    **clip["audio"],
+                    "array": output_audio,
+                },
+            }

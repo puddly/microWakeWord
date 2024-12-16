@@ -268,7 +268,7 @@ class MmapFeatureGenerator(object):
         if np.issubdtype(spectrogram.dtype, np.uint16):
             spectrogram = spectrogram.astype(np.float32) * 0.0390625
 
-        return spectrogram
+        return {"spectrogram": spectrogram, "label": self.label}
 
     def get_feature_generator(
         self,
@@ -308,7 +308,7 @@ class MmapFeatureGenerator(object):
                         feature_start_index : feature_start_index + features_length
                     ]
 
-                    yield split_spectrogram
+                    yield {"spectrogram": split_spectrogram, "label": self.label}
             else:
                 for cutoff in self.fixed_right_cutoffs:
                     fixed_spectrogram = fixed_length_spectrogram(
@@ -318,7 +318,7 @@ class MmapFeatureGenerator(object):
                         cutoff,
                     )
 
-                    yield fixed_spectrogram
+                    yield {"spectrogram": fixed_spectrogram, "label": self.label}
 
 
 class ClipsHandlerWrapperGenerator(object):
@@ -376,10 +376,10 @@ class ClipsHandlerWrapperGenerator(object):
         if truncation_strategy == "default":
             truncation_strategy = self.truncation_strategy
 
-        spectrogram = next(self.augmented_generator)
+        clip = next(self.augmented_generator)
 
         spectrogram = fixed_length_spectrogram(
-            spectrogram,
+            clip["spectrogram"],
             features_length,
             truncation_strategy,
             right_cutoff=0,
@@ -389,7 +389,10 @@ class ClipsHandlerWrapperGenerator(object):
         if np.issubdtype(spectrogram.dtype, np.uint16):
             spectrogram = spectrogram.astype(np.float32) * 0.0390625
 
-        return spectrogram
+        clip["spectrogram"] = spectrogram
+        clip["label"] = float(self.label)
+
+        return clip
 
     def get_feature_generator(
         self,
@@ -533,7 +536,7 @@ class FeatureHandler(object):
         elif (mode == "validation") or (mode == "testing"):
             sample_count = self.get_mode_size(mode)
 
-        data = []
+        clips = []
         labels = []
         weights = []
 
@@ -553,19 +556,19 @@ class FeatureHandler(object):
             )
 
             for provider in random_feature_providers:
-                spectrogram = provider.get_random_spectrogram(
+                clip = provider.get_random_spectrogram(
                     "training", features_length, truncation_strategy
                 )
-                spectrogram = spec_augment(
-                    spectrogram,
+                clip["spectrogram"] = spec_augment(
+                    clip["spectrogram"],
                     augmentation_policy["time_mask_max_size"],
                     augmentation_policy["time_mask_count"],
                     augmentation_policy["freq_mask_max_size"],
                     augmentation_policy["freq_mask_count"],
                 )
 
-                data.append(spectrogram)
-                labels.append(float(provider.label))
+                clips.append(clip)
+                labels.append(float(clip["label"]))
                 weights.append(float(provider.penalty_weight))
         else:
             for provider in self.feature_providers:
@@ -573,14 +576,17 @@ class FeatureHandler(object):
                     mode, features_length, truncation_strategy
                 )
 
-                for spectrogram in generator:
-                    data.append(spectrogram)
-                    labels.append(provider.label)
+                for clip in generator:
+                    clips.append(clip)
+                    labels.append(clip["label"])
                     weights.append(provider.penalty_weight)
+
+        data = [clip["spectrogram"] for clip in clips]
 
         if truncation_strategy != "none":
             # Spectrograms are all the same length, convert to numpy array
             data = np.array(data)
+
         labels = np.array(labels)
         weights = np.array(weights)
 

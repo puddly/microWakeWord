@@ -158,6 +158,22 @@ class Clips:
 
         self.clips = audio_dataset
 
+    def _process_clip(self, entry):
+        clip_audio = entry["audio"]["array"]
+
+        if self.remove_silence:
+            clip_audio = self.remove_silence_function(clip_audio)
+
+        if self.trim_zeros:
+            clip_audio = np.trim_zeros(clip_audio)
+
+        if self.trimmed_clip_duration_s:
+            total_samples = int(self.trimmed_clip_duration_s * 16000)
+            clip_audio = clip_audio[:total_samples]
+
+        clip_audio = self.repeat_clip(clip_audio)
+        return {**entry, "audio": {**entry["audio"], "array": clip_audio}}
+
     def audio_generator(self, split: str | None = None, repeat: int = 1):
         """A Python generator that retrieves all loaded audio clips.
 
@@ -172,44 +188,23 @@ class Clips:
             clip_list = self.clips
         else:
             clip_list = self.split_clips[split]
+
         for _ in range(repeat):
             for clip in clip_list:
-                clip_audio = clip["audio"]["array"]
+                yield self._process_clip(clip)
 
-                if self.remove_silence:
-                    clip_audio = self.remove_silence_function(clip_audio)
-
-                if self.trim_zeros:
-                    clip_audio = np.trim_zeros(clip_audio)
-
-                if self.trimmed_clip_duration_s:
-                    total_samples = int(self.trimmed_clip_duration_s * 16000)
-                    clip_audio = clip_audio[:total_samples]
-
-                clip_audio = self.repeat_clip(clip_audio)
-                yield clip_audio
-
-    def get_random_clip(self):
+    def get_random_clip(self, split: str | None = None):
         """Retrieves a random audio clip.
 
         Returns:
             numpy.ndarray: Array with the audio clip's samples.
         """
-        rand_audio_entry = random.choice(self.clips)
-        clip_audio = rand_audio_entry["audio"]["array"]
+        if split is None:
+            clip_list = self.clips
+        else:
+            clip_list = self.split_clips[split]
 
-        if self.remove_silence:
-            clip_audio = self.remove_silence_function(clip_audio)
-
-        if self.trim_zeros:
-            clip_audio = np.trim_zeros(clip_audio)
-
-        if self.trimmed_clip_duration_s:
-            total_samples = int(self.trimmed_clip_duration_s * 16000)
-            clip_audio = clip_audio[:total_samples]
-
-        clip_audio = self.repeat_clip(clip_audio)
-        return clip_audio
+        return self._process_clip(random.choice(clip_list))
 
     def random_audio_generator(self, max_clips: int = math.inf):
         """A Python generator that retrieves random audio clips.

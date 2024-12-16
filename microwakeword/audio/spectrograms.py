@@ -56,7 +56,7 @@ class SpectrogramGeneration:
         if self.augmenter is not None:
             clip = self.augmenter.augment_clip(clip)
 
-        return generate_features_for_clip(clip, self.step_ms)
+        return generate_features_for_clip(clip["audio"]["array"], self.step_ms)
 
     def spectrogram_generator(self, random=False, max_clips=None, **kwargs):
         """A Python generator that retrieves (augmented) spectrograms.
@@ -66,7 +66,7 @@ class SpectrogramGeneration:
             kwargs: Parameters to pass to the clips audio generator.
 
         Yields:
-            numpy.ndarry: 2D spectrogram array for the random (augmented) audio clip.
+            dict: original clip object with a new `spectrogram` key for the random (augmented) audio clip.
         """
         if random:
             if max_clips is not None:
@@ -82,7 +82,7 @@ class SpectrogramGeneration:
             augmented_generator = clip_generator
 
         for augmented_clip in augmented_generator:
-            spectrogram = generate_features_for_clip(augmented_clip, self.step_ms)
+            spectrogram = generate_features_for_clip(augmented_clip["audio"]["array"], self.step_ms)
 
             if self.split_spectrogram_duration_s is not None:
                 # Splits the resulting spectrogram into non-overlapping spectrograms. The features from the first 20 feature windows are dropped.
@@ -97,9 +97,9 @@ class SpectrogramGeneration:
                     )[20::desired_spectrogram_length, ...]
 
                     for i in range(slided_spectrograms.shape[0]):
-                        yield np.squeeze(slided_spectrograms[i])
+                        yield {**augmented_clip, "spectrogram": np.squeeze(slided_spectrograms[i])}
                 else:
-                    yield spectrogram
+                    yield {**augmented_clip, "spectrogram": spectrogram}
             elif self.slide_frames is not None:
                 # Generates self.slide_frames spectrograms by shifting over the already generated spectrogram
                 spectrogram_length = spectrogram.shape[0] - self.slide_frames + 1
@@ -108,6 +108,6 @@ class SpectrogramGeneration:
                     spectrogram, window_shape=(spectrogram_length, spectrogram.shape[1])
                 )
                 for i in range(self.slide_frames):
-                    yield np.squeeze(slided_spectrograms[i])
+                    yield {**augmented_clip, "spectrogram": np.squeeze(slided_spectrograms[i])}
             else:
-                yield spectrogram
+                yield {**augmented_clip, "spectrogram": spectrogram}
