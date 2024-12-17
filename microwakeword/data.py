@@ -71,8 +71,8 @@ def spec_augment(
     return augmented_spectrogram
 
 
-def fixed_length_spectrogram(
-    spectrogram: np.ndarray,
+def get_fixed_length_spectrogram_settings(
+    data_length: int,
     features_length: int,
     truncation_strategy: str = "random",
     right_cutoff: int = 0,
@@ -80,7 +80,7 @@ def fixed_length_spectrogram(
     """Returns a spectrogram with specified length. Pads with zeros at the start if too short. Removes feature windows following ``truncation_strategy`` if too long.
 
     Args:
-        spectrogram (numpy.ndarray): The spectrogram to truncate or pad.
+        data_length (int): Length of the spectrogram to truncate or pad.
         features_length (int): The desired spectrogram length.
         truncation_strategy (str): How to truncate if ``spectrogram`` is longer than ``features_length`` One of:
             random: choose a random portion of the entire spectrogram - useful for long negative samples
@@ -93,8 +93,9 @@ def fixed_length_spectrogram(
         numpy.ndarry: The fixed length spectrogram due to padding or truncation.
     """
 
-    data_length = spectrogram.shape[0]
     features_offset = 0
+    pad_slices = 0
+
     if data_length > features_length:
         if truncation_strategy == "random":
             features_offset = np.random.randint(0, data_length - features_length)
@@ -110,12 +111,15 @@ def fixed_length_spectrogram(
     else:
         pad_slices = features_length - data_length
 
-        spectrogram = np.pad(
-            spectrogram, ((pad_slices, 0), (0, 0)), constant_values=(0, 0)
-        )
+    return features_offset, pad_slices
+
+
+def truncate_spectrogram(data: np.ndarray, features_offset: int, pad_slices: int, features_length: int, scale: int = 1):
+    if pad_slices > 0:
+        data = np.pad(data, ((scale * pad_slices, 0), (0, 0)), constant_values=(0, 0))
         features_offset = 0
 
-    return spectrogram[features_offset : (features_offset + features_length)]
+    return data[scale * features_offset : scale * features_offset + scale * features_length]
 
 
 class MmapFeatureGenerator(object):
@@ -257,12 +261,13 @@ class MmapFeatureGenerator(object):
             feature["subindex"]
         ]
 
-        spectrogram = fixed_length_spectrogram(
-            spectrogram,
+        features_offset, pad_slices = get_fixed_length_spectrogram_settings(
+            spectrogram.shape[0],
             features_length,
             truncation_strategy,
             right_cutoff,
         )
+        spectrogram = truncate_spectrogram(spectrogram, features_offset, pad_slices, features_length)
 
         # Spectrograms with type np.uint16 haven't been scaled
         if np.issubdtype(spectrogram.dtype, np.uint16):
@@ -311,14 +316,17 @@ class MmapFeatureGenerator(object):
                     yield {"spectrogram": split_spectrogram, "label": self.label}
             else:
                 for cutoff in self.fixed_right_cutoffs:
-                    fixed_spectrogram = fixed_length_spectrogram(
-                        spectrogram,
+                    features_offset, pad_slices = get_fixed_length_spectrogram_settings(
+                        spectrogram.shape[0],
                         features_length,
                         truncation_strategy,
                         cutoff,
                     )
+                    spectrogram = truncate_spectrogram(
+                        spectrogram, features_offset, pad_slices, features_length
+                    )
 
-                    yield {"spectrogram": fixed_spectrogram, "label": self.label}
+                    yield {"spectrogram": spectrogram, "label": self.label}
 
 
 class ClipsHandlerWrapperGenerator(object):
@@ -361,12 +369,19 @@ class ClipsHandlerWrapperGenerator(object):
         if truncation_strategy == "default":
             truncation_strategy = self.truncation_strategy
 
-        spectrogram = fixed_length_spectrogram(
-            clip["spectrogram"],
+        features_offset, pad_slices = get_fixed_length_spectrogram_settings(
+            clip["spectrogram"].shape[0],
             features_length,
             truncation_strategy,
             right_cutoff=0,
         )
+        spectrogram = truncate_spectrogram(
+            clip["spectrogram"], features_offset, pad_slices, features_length
+        )
+        audio = truncate_spectrogram(
+            clip["audio"]["array"], features_offset, pad_slices, features_length, scale=(clip["audio"]["array"].shape[0] // clip["spectrogram"].shape[0])
+        )
+        clip["audio"]["array"] = audio
 
         # Spectrograms with type np.uint16 haven't been scaled
         if np.issubdtype(spectrogram.dtype, np.uint16):
@@ -375,8 +390,7 @@ class ClipsHandlerWrapperGenerator(object):
         clip["spectrogram"] = spectrogram
         clip["label"] = float(self.label)
 
-        return clip        
-
+        return clip
 
     def get_random_spectrogram(self, mode, features_length, truncation_strategy):
         """Retrieves a random spectrogram from the specified mode with specified length after truncation.
@@ -405,7 +419,9 @@ class ClipsHandlerWrapperGenerator(object):
     ):
         """Function to maintain compatability with the MmapFeatureGenerator class."""
         for clip in self.spectrogram_generation.spectrogram_generator(mode=mode):
-            yield self._add_spectrogram_to_clip(clip, features_length, truncation_strategy)
+            yield self._add_spectrogram_to_clip(
+                clip, features_length, truncation_strategy
+            )
 
 
 class FeatureHandler(object):
