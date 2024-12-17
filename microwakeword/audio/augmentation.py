@@ -123,40 +123,36 @@ class Augmentation:
                 audiomentations.TanhDistortion(
                     p=augmentation_probabilities.get("TanhDistortion", 0.0),
                     min_distortion=0.0001,
-                    max_distortion=0.10,
+                    max_distortion=0.05,
                 ),
                 audiomentations.PitchShift(
                     p=augmentation_probabilities.get("PitchShift", 0.0),
                     min_semitones=-3,
                     max_semitones=3,
                 ),
-                audiomentations.BandStopFilter(
-                    p=augmentation_probabilities.get("BandStopFilter", 0.0),
-                ),
-                audiomentations.AddColorNoise(
-                    p=augmentation_probabilities.get("AddColorNoise", 0.0),
-                    min_snr_db=color_min_snr_db,
-                    max_snr_db=color_max_snr_db,
-                ),
-                background_noise_augment,
                 audiomentations.Gain(
                     p=augmentation_probabilities.get("Gain", 0.0),
                     min_gain_db=min_gain_db,
                     max_gain_db=max_gain_db,
                 ),
+                audiomentations.BandStopFilter(
+                    p=augmentation_probabilities.get("BandStopFilter", 0.0),
+                ),
+                background_noise_augment,
                 audiomentations.GainTransition(
-                    p=augmentation_probabilities.get("GainTransition", 0.0),
-                    min_gain_db=min_gain_transition_db,
-                    max_gain_db=max_gain_transition_db,
+                   p=augmentation_probabilities.get("GainTransition", 0.0),
+                   min_gain_db=min_gain_transition_db,
+                   max_gain_db=max_gain_transition_db,
                 ),
                 reverb_augment,
-                audiomentations.Compose(
-                    transforms=[
-                        audiomentations.Normalize(
-                            apply_to="only_too_loud_sounds", p=1.0
-                        )
-                    ]
-                ),  # If the audio is clipped, normalize
+                # If the audio is clipped, normalize
+                audiomentations.Normalize(apply_to="only_too_loud_sounds", p=1.0),
+                # Introduce noise at the end
+                audiomentations.AddColorNoise(
+                    p=augmentation_probabilities.get("AddColorNoise", 0.0),
+                    min_snr_db=color_min_snr_db,
+                    max_snr_db=color_max_snr_db,
+                ),
             ],
             shuffle=False,
         )
