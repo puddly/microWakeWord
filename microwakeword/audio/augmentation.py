@@ -167,8 +167,9 @@ class Augmentation:
             numpy.ndarray: Array of audio samples with silence added to the end.
         """
         if self.min_jitter_samples < self.max_jitter_samples:
-            jitter_samples = np.random.randint(
-                self.min_jitter_samples, self.max_jitter_samples
+            jitter_samples = max(
+                0,
+                np.random.randint(self.min_jitter_samples, self.max_jitter_samples),
             )
         else:
             jitter_samples = self.min_jitter_samples
